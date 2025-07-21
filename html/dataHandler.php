@@ -746,33 +746,32 @@ elseif($_GET['type'] == "settings")
 	switch($_GET['dropdown'])
 	{
 		case "general":
+
+			// Supported state/territory list
+			// Querying from EMWIN file names does not include all supported states/territories
+			// The data is in the emwin files, but parsing that here on the fly would be too slow
+			// If we ever move to a database backend, this will probably change
+			$dropdownList['stateAbbr'] = array("AL", "AK", "AS", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FM", "FL", "GA", "GU", "HI", "ID", "IL",
+				"IN", "IA", "KS", "KY", "LA", "ME", "MH", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC",
+				"ND", "MP", "OH", "OK", "OR", "PW", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VI", "VA", "WA", "WV", "WI", "WY");
+
 			//Query all emwin files
 			$allEmwinFiles = scandir_recursive($config['general']['emwinPath'], $config['general']['fastEmwin']);
 			
 			//Find pertinent data in emwin files
-			$dropdownList['radar'] = $dropdownList['stateAbbr'] = $dropdownList['orig'] = $dropdownList['rwrOrig'] = $dropdownList['timezone'] = $allOrig = $allRwrOrig = [];
+			$dropdownList['radar'] = $dropdownList['orig'] = $dropdownList['rwrOrig'] = $dropdownList['timezone'] = $allOrig = $allRwrOrig = [];
 			foreach($allEmwinFiles as $thisFile)
 			{
 				if(strpos($thisFile, "-RAD") !== false) $dropdownList['radar'][] = substr($thisFile, -9, 5);
-				if(strpos($thisFile, "-ZFP") !== false)
-				{
-					$dropdownList['stateAbbr'][] = substr($thisFile, -6, 2);
-					$allOrig[] = substr($thisFile, -9, 5);
-				}
-				if(strpos($thisFile, "-RWR") !== false)
-				{
-					$dropdownList['stateAbbr'][] = substr($thisFile, -6, 2); //Probably redundant
-					$allRwrOrig[] = substr($thisFile, -9, 5);
-				}
+				if(strpos($thisFile, "-ZFP") !== false) $allOrig[] = substr($thisFile, -9, 5);
+				if(strpos($thisFile, "-RWR") !== false) $allRwrOrig[] = substr($thisFile, -9, 5);
 			}
 			
 			//Distill information from EMWIN files into user menus
 			$dropdownList['radar'] = array_unique($dropdownList['radar']);
-			$dropdownList['stateAbbr'] = array_unique($dropdownList['stateAbbr']);
 			$allOrig = array_unique($allOrig);
 			$allRwrOrig = array_unique($allRwrOrig);
 			sort($dropdownList['radar']);
-			sort($dropdownList['stateAbbr']);
 			
 			//Additional Processing for Product Office Listings
 			foreach($allOrig as $thisOrig) $dropdownList['orig'][] = array("state" => substr($thisOrig, 3, 2), "orig" => substr($thisOrig, 0, 3));
