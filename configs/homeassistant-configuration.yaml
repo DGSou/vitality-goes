@@ -145,62 +145,62 @@ rest:
         value_template: "{{ value_json.windDirection }}"
 
 # Vitality GOES Weather Source
-weather:
-  - platform: template
-    unique_id: weather.vitality_goes
-    name: "Vitality GOES"
-    condition_template: "{{ states('sensor.vitality_goes_conditions') }}"
-    temperature_template: "{{ states('sensor.vitality_goes_temp') | float }}"
-    temperature_unit: "°F"
-    humidity_template: "{{ states('sensor.vitality_goes_humidity') | float }}"
-    pressure_template: "{{ states('sensor.vitality_goes_pressure') | float }}"
-    pressure_unit: "inHg"
-    wind_speed_template: "{{ states('sensor.vitality_goes_wind') | float }}"
-    wind_speed_unit: "mph"
-    wind_bearing_template: "{{ states('sensor.vitality_goes_wind_direction') }}"
-    attribution_template: "Powered by Vitality GOES - https://github.com/JVital2013/vitality-goes"
-    forecast_daily_template: >
-      {% set forecast = namespace(value=[]) %}
-      {% if state_attr("sensor.vitality_goes_forecast_day_1", "maxTemp") == none %}
-        {% set forecastDay = namespace(value=1) %}
-      {% else %}
+template:
+  - weather:
+    - unique_id: weather.vitality_goes
+      name: "Vitality GOES"
+      condition_template: "{{ states('sensor.vitality_goes_conditions') }}"
+      temperature_template: "{{ states('sensor.vitality_goes_temp') | float }}"
+      temperature_unit: "°F"
+      humidity_template: "{{ states('sensor.vitality_goes_humidity') | float }}"
+      pressure_template: "{{ states('sensor.vitality_goes_pressure') | float }}"
+      pressure_unit: "inHg"
+      wind_speed_template: "{{ states('sensor.vitality_goes_wind') | float }}"
+      wind_speed_unit: "mph"
+      wind_bearing_template: "{{ states('sensor.vitality_goes_wind_direction') }}"
+      attribution_template: "Powered by Vitality GOES - https://github.com/JVital2013/vitality-goes"
+      forecast_daily_template: >
+        {% set forecast = namespace(value=[]) %}
+        {% if state_attr("sensor.vitality_goes_forecast_day_1", "maxTemp") == none %}
+          {% set forecastDay = namespace(value=1) %}
+        {% else %}
           {% set forecastDay = namespace(value=0) %}
-      {% endif %}
-      
-      {% for i in range(forecastDay.value, 7) %}
-        {# Get conditions for day #}
-        {% set forecastClouds = state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "amClouds") %}
-        {% set forecastPrecip = state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "amPrecip") %}
-        {% set forecastCondition = "exceptional" %}
-        {% if forecastClouds == "CL" or forecastClouds == "FW" %}
-          {% set forecastCondition = "sunny" %}
-        {% elif forecastClouds == "SC" or forecastClouds == "B1" %}
-          {% if forecastPrecip | int < 50 %}
-            {% set forecastCondition = "partlycloudy" %}
-          {% else %}
-            {% set forecastCondition = "rainy" %}
-          {% endif %}
-        {% elif forecastClouds == "B2" or forecastClouds == "OV" %}
-          {% if forecastPrecip | int < 50 %}
-            {% set forecastCondition = "cloudy" %}
-          {% else %}
-            {% set forecastCondition = "rainy" %}
-          {% endif %}
         {% endif %}
         
-        {# Build Forecast Array #}
-        {% set forecast.value = forecast.value + 
-        [
-          {
-            "condition": forecastCondition,
-            "datetime": strptime(state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "date") + " " + (now() + timedelta(days=forecastDay.value)).year | string, "%A, %b %d %Y").isoformat(),
-            "native_temperature": state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "maxTemp"),
-            "native_templow": state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "minTemp"),
-            "precipitation_probability": forecastPrecip
-          }
-        ] %}
-        
-        {# Get ready for next day #}
-        {% set forecastDay.value = forecastDay.value + 1 %}
-      {% endfor %}
-      {{ forecast.value }}
+        {% for i in range(forecastDay.value, 7) %}
+          {# Get conditions for day #}
+          {% set forecastClouds = state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "amClouds") %}
+          {% set forecastPrecip = state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "amPrecip") %}
+          {% set forecastCondition = "exceptional" %}
+          {% if forecastClouds == "CL" or forecastClouds == "FW" %}
+            {% set forecastCondition = "sunny" %}
+          {% elif forecastClouds == "SC" or forecastClouds == "B1" %}
+            {% if forecastPrecip | int < 50 %}
+              {% set forecastCondition = "partlycloudy" %}
+            {% else %}
+              {% set forecastCondition = "rainy" %}
+            {% endif %}
+          {% elif forecastClouds == "B2" or forecastClouds == "OV" %}
+            {% if forecastPrecip | int < 50 %}
+              {% set forecastCondition = "cloudy" %}
+            {% else %}
+              {% set forecastCondition = "rainy" %}
+            {% endif %}
+          {% endif %}
+          
+          {# Build Forecast Array #}
+          {% set forecast.value = forecast.value + 
+          [
+            {
+              "condition": forecastCondition,
+              "datetime": strptime(state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "date") + " " + (now() + timedelta(days=forecastDay.value)).year | string, "%A, %b %d %Y").isoformat(),
+              "native_temperature": state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "maxTemp"),
+              "native_templow": state_attr("sensor.vitality_goes_forecast_day_" ~ (forecastDay.value + 1), "minTemp"),
+              "precipitation_probability": forecastPrecip
+            }
+          ] %}
+          
+          {# Get ready for next day #}
+          {% set forecastDay.value = forecastDay.value + 1 %}
+        {% endfor %}
+        {{ forecast.value }}

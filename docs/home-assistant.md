@@ -27,7 +27,7 @@ To fix this problem, we can use Vitality GOES as the weather provider in Home As
 To set this up, the following items should already be configured:
 
 1. **Vitality GOES:** The "Current Weather" screen must load successfully, and the "Current Weather" and "7-day Forecast" cards must work. If either are missing, verify your config.ini.
-2. **Home Assistant:** To get started with it, see [https://www.home-assistant.io/getting-started/](https://www.home-assistant.io/getting-started/). You must be running version 2023.9 or newer.
+2. **Home Assistant:** To get started with it, see [https://www.home-assistant.io/getting-started/](https://www.home-assistant.io/getting-started/). You must be running version 2025.12 or newer. Files for older Home Assistant versions are available in old releases.
 
 Vitality GOES and Home Assistant can (and probably should) be on different machines, as long as they can talk to each other across the network.
 
@@ -37,13 +37,13 @@ Nothing will need to be changed about Vitality GOES as long as its Current Weath
 
 In Home Assistant, [edit your configuration.yaml file](https://www.home-assistant.io/docs/configuration/) to include the configuration information found in [configs/homeassistant-configuration.yaml](/configs/homeassistant-configuration.yaml) of this repo.
 
-If you don't already have a `rest:` or `weather:` section in your configuration.yaml (you probably won't), you can just copy and paste my example into your config file, save it, and restart Home Assistant. Don't forget to set the IP/hostname and port of your Vitality GOES instance where notated!
+If you don't already have a `rest:` or `template:` section in your configuration.yaml (you probably won't), you can just copy and paste my example into your config file, save it, and restart Home Assistant. Don't forget to set the IP/hostname and port of your Vitality GOES instance where notated!
 
 If you're a Home Assistant Pro and already have one or both of these sections, work the example config in as necessary.
 
 ## How it works
 
-The `rest:` configuration pulls pertinent weather data from Vitality GOES via the dataHandler API.  The data values are loaded into a multitude of Home Assistant "Sensor" entities. Then, the `weather:` configuration assembles all the sensors into one cohesive "Weather" entity.
+The `rest:` configuration pulls pertinent weather data from Vitality GOES via the dataHandler API.  The data values are loaded into a multitude of Home Assistant "Sensor" entities. Then, the `template:` configuration assembles all the sensors into one cohesive "Weather" entity.
 
   ![Example Vitality GOES Entities](https://user-images.githubusercontent.com/24253715/208742817-9a2386e5-cc94-4b31-99a0-f3d48bb16807.png)
 
