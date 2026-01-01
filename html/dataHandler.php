@@ -60,16 +60,36 @@ else
 	}
 }
 
-//Overwrite first setting profile in array with all other settings on server
+//Overwrite up to first 10 setting profiles in array with all other settings on server
 if(count($currentSettings) == 0 || count(array_diff($config['location'], $currentSettings[0])) != 0) $sendCookie = true;
-$currentSettings[0] = $config['location'];
+elseif(array_key_exists('location1', $config)) if(count(array_diff($config['location1'], $currentSettings[1])) != 0) $sendCookie = true;
+elseif(array_key_exists('location2', $config)) if(count(array_diff($config['location2'], $currentSettings[2])) != 0) $sendCookie = true;
+elseif(array_key_exists('location3', $config)) if(count(array_diff($config['location3'], $currentSettings[3])) != 0) $sendCookie = true;
+elseif(array_key_exists('location4', $config)) if(count(array_diff($config['location4'], $currentSettings[4])) != 0) $sendCookie = true;
+elseif(array_key_exists('location5', $config)) if(count(array_diff($config['location5'], $currentSettings[5])) != 0) $sendCookie = true;
+elseif(array_key_exists('location6', $config)) if(count(array_diff($config['location6'], $currentSettings[6])) != 0) $sendCookie = true;
+elseif(array_key_exists('location7', $config)) if(count(array_diff($config['location7'], $currentSettings[7])) != 0) $sendCookie = true;
+elseif(array_key_exists('location8', $config)) if(count(array_diff($config['location8'], $currentSettings[8])) != 0) $sendCookie = true;
+elseif(array_key_exists('location9', $config)) if(count(array_diff($config['location9'], $currentSettings[9])) != 0) $sendCookie = true;
+
+$fixedProfilesCount = 1; //Number of fixed current settings values below
+$currentSettings[0] = $config['location'];  //Ground Station Defaults
+if(array_key_exists('location1', $config)){ $currentSettings[1] = $config['location1']; $fixedProfilesCount++; }
+if(array_key_exists('location2', $config)){ $currentSettings[2] = $config['location2']; $fixedProfilesCount++; }
+if(array_key_exists('location3', $config)){ $currentSettings[3] = $config['location3']; $fixedProfilesCount++; }
+if(array_key_exists('location4', $config)){ $currentSettings[4] = $config['location4']; $fixedProfilesCount++; }
+if(array_key_exists('location5', $config)){ $currentSettings[5] = $config['location5']; $fixedProfilesCount++; }
+if(array_key_exists('location6', $config)){ $currentSettings[6] = $config['location6']; $fixedProfilesCount++; }
+if(array_key_exists('location7', $config)){ $currentSettings[7] = $config['location7']; $fixedProfilesCount++; }
+if(array_key_exists('location8', $config)){ $currentSettings[8] = $config['location8']; $fixedProfilesCount++; }
+if(array_key_exists('location9', $config)){ $currentSettings[9] = $config['location9']; $fixedProfilesCount++; }
 
 //Load selected profile; make sure cookie is set and not malformed
 if(array_key_exists('selectedProfile', $_COOKIE) && is_numeric($_COOKIE['selectedProfile']) && intval($_COOKIE['selectedProfile']) < count($currentSettings)) $selectedProfile = intval($_COOKIE['selectedProfile']);
 else
 {
-	$selectedProfile = 0;
-	$sendCookie = true;
+        $selectedProfile = 0;
+        $sendCookie = true;
 }
 
 //Parse settings loaded from cookie for safety reasons
@@ -136,6 +156,13 @@ if($selectedProfile > 0)
 				break;
 		}
 	}
+}
+
+//For script use: return data for requested profile, but do not alter cookie settings
+if(array_key_exists('profile', $_GET) && is_numeric($_GET['profile']) && intval($_GET['profile']) < $fixedProfilesCount) //Only valid for values of fixed current settings values
+{
+	$selectedProfile = intval($_GET['profile']);
+	$sendCookie = false;
 }
 
 //Save settings in case something changed
@@ -223,6 +250,9 @@ if($_GET['type'] == "preload")
 	if($currentTheme === false) $preloadData['theme'] = "default";
 	else $preloadData['theme'] = $currentTheme['slug'];
 	
+	//Share how many fixed profiles are located in config.ini with script.js
+	$preloadData['numFixedProfiles'] = $fixedProfilesCount;
+
 	header('Content-Type: application/json; charset=utf-8');
 	echo json_encode($preloadData);
 }
@@ -866,7 +896,8 @@ elseif($_GET['type'] == "alertJSON")
 		substr($currentSettings[$selectedProfile]['orig'], -2), substr($currentSettings[$selectedProfile]['rwrOrig'], -2)))) . ")";
 	
 	//Find pertinent files
-	$wwFiles = preg_grep("/-(SQW|DSW|FRW|FFW|FLW|SVR|TOR|EWW)" . $currentSettings[$selectedProfile]['orig'] . "\.TXT$/i", $allEmwinFiles);
+	// ** See https://www.weather.gov/nwr/eventcodes for any updates to this list **
+	$wwFiles = preg_grep("/-(SQW|DSW|FRW|FFW|FLW|SVR|TOR|EWW|SMW|WSW|CFW|FFA|FFS|FLS|SVS|HWO|RFW)" . $currentSettings[$selectedProfile]['orig'] . "\.TXT$/i", $allEmwinFiles);
 	$spsFiles = preg_grep("/-SPS" . $currentSettings[$selectedProfile]['orig'] . "\.TXT$/i", $allEmwinFiles);
 	$hlsFiles = preg_grep("/-HLS.*" . $currentSettings[$selectedProfile]['orig'] . "\.TXT$/i", $allEmwinFiles);
 	$laeFiles = preg_grep("/-LAE.*$alertStateAbbrs\.TXT$/i", $allEmwinFiles);
@@ -912,8 +943,12 @@ elseif($_GET['type'] == "alertJSON")
 		//Parse warning data from file
 		$weatherData = file($thisFile);
 		$messageStart = $messageEnd = 0;
+		$expireTime = -1;
+		$noHazards1 = 0;
+		$noHazards2_7 = 0;
 		for($i = 0; $i < count($weatherData); $i++)
 		{
+			//For BULLETIN messages
 			//Get Header Information about weather warning, and beginning of message
 			if(stripos($weatherData[$i], "BULLETIN - ") === 0 || ($messageStart == 0 && stripos($weatherData[$i], "Dust Advisory") === 0))
 			{
@@ -931,14 +966,80 @@ elseif($_GET['type'] == "alertJSON")
 				$messageStart = ++$i + 1;
 				continue;
 			}
-			
+
+			//For URGENT messages
+			//Get Header Information about weather warning, and beginning of message
+			if(stripos($weatherData[$i], "URGENT - ") === 0)
+			{
+				if(stripos($weatherData[$i], "URGENT - IMMEDIATE BROADCAST REQUESTED") === 0)
+				{
+					$alertType = trim($weatherData[++$i]);
+					if(empty($alertType)) $alertType = trim($weatherData[++$i]);
+                                	$issuingOffice = trim($weatherData[++$i]);
+					$issueTime = trim($weatherData[++$i]);
+					if(substr($issueTime, 0, 10) === "Relayed by") $issueTime = trim($weatherData[++$i]);
+				}
+
+				else{
+					$alertType = trim(substr($weatherData[$i],9));
+					$issuingOffice = trim($weatherData[++$i]);
+					$issueTime = trim($weatherData[++$i]);
+
+					if(substr($issueTime, 0, 9) === "Issued by")
+					{
+						$issuingOffice = substr($issueTime, 10);
+						$issueTime = trim($weatherData[++$i]);
+					}
+				}
+
+				$messageStart = ++$i + 1;
+				continue;
+			}
+
+                        //Find second timestamp (removes weather zone and county/town identifier data, skipping to alert details)
+                        if($issueTime != "" && stripos($weatherData[$i], $issueTime) !== false)
+                        {
+                                $messageStart = $i + 2;
+                                continue;
+                        }
+
+			//For Coastal Hazard Message, Flood Watch, Flash Flood Statement, Flood Advisory, Severe Weather Statment, Hazardous Weather Oulook
+                        //Get Header Information about weather warning, and beginning of message
+                        if(stripos($weatherData[$i], "Coastal Hazard Message") === 0 || stripos($weatherData[$i], "Flood Advisory") === 0|| stripos($weatherData[$i], "Flood Watch") === 0 || stripos($weatherData[$i], "Flash Flood Statement") === 0 || stripos($weatherData[$i], "Severe Weather Statment") === 0 || stripos($weatherData[$i], "Hazardous Weather Outlook") === 0)
+                        {
+                                $alertType = trim($weatherData[$i]);
+                                $issuingOffice = trim($weatherData[++$i]);
+                                $issueTime = trim($weatherData[++$i]);
+
+                                if(substr($issueTime, 0, 9) === "Issued by")
+                                {
+                                        $issuingOffice = substr($issueTime, 10);
+                                        $issueTime = trim($weatherData[++$i]);
+                                }
+
+                                $messageStart = ++$i + 1;
+                                continue;
+                        }
+
+			//Check for HWO that indicates no current hazards
+			if(stripos($weatherData[$i], ".DAY ONE...") === 0)
+			{
+				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time.") $noHazards1 = 1;
+			}
+			if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
+			{
+				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time.") $noHazards2_7 = 1;
+			}
+
 			//Get end of message
 			if(trim($weatherData[$i]) == "&&")
 			{
+				$weatherData[$i] = "";
+				if(strlen(trim($weatherData[$i+2]))) $weatherData[$i+2] = "";
 				$messageEnd = $i - 1;
 				continue;
 			}
-			
+
 			//Get expiry time
 			if(stripos($weatherData[$i], "* Until") === 0)
 			{
@@ -949,8 +1050,29 @@ elseif($_GET['type'] == "alertJSON")
 				//Convert the expire time to something PHP can understand
 				$expireTimeStr = substr_replace(substr(str_replace("* Until ", "", trim($weatherData[$i])), 0, -1), ":", -9, 0);
 				$expireTime = strtotime($expireTimeStr, strtotime($issueTimeParts['date']." ".$issueTimeParts['time']));
+				$expireTimePrint = date('gi A T D M j Y',$expireTime);
 			}
 			
+			//Get expiry time, if not in "* Until" format
+                        if($issueTime != "" && $expireTime == -1 && preg_match("/([0-9]{6})-$/", trim($weatherData[$i]), $expireTimeStr))
+                        {
+                                //Get Issue Date
+                                preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
+                                $timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
+                                $timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
+                                $timestampFormatter->setTimezone(new DateTimeZone("UTC"));
+
+                                //Based on issue date, get expire date
+                                $monthOffset = 0;
+                                $expireDate = intval(substr($expireTimeStr[1], 0, 2));
+                                if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
+                                $timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
+                                $timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
+                                $expireTime = $timestampFormatter->getTimestamp();
+				$expireTimePrint = date('gi A T D M j Y',$expireTime);
+                                continue;
+                        }
+
 			//Get geofencing of warning
 			if(stripos($weatherData[$i], "LAT...LON") === 0)
 			{
@@ -971,19 +1093,45 @@ elseif($_GET['type'] == "alertJSON")
 					if(stripos($nextString, "TIME...MOT...LOC") === 0 || trim($nextString) == "&&") break 2;
 				}
 			}
+
+			//Get real end of message
+                        if(trim($weatherData[$i]) == "$$")
+                        {
+				//end of file, all done
+				if($i+1 == count($weatherData))
+				{
+				        if($messageEnd == 0) $messageEnd = $i-1;
+					break;
+				}
+				//multipart message (ignore initials), continue
+				else if(strlen(trim($weatherData[$i+2]))>3)
+				{
+					$i++;
+				}
+				//caught initials, no more messages
+				else $messageEnd = $i-1;
+                        }
 		}
 		
 		//Run checks to see if execution should continue
+		if($noHazards1 && $noHazards2_7) continue;
 		if(isset($expireTime) && time() > $expireTime) continue;
-		if(array_key_exists('lat', $currentSettings[$selectedProfile]) && 
+		if(isset($geoLat) && isset($geoLon) &&
+			array_key_exists('lat', $currentSettings[$selectedProfile]) && 
 			array_key_exists('lon', $currentSettings[$selectedProfile]) && 
 			!is_in_polygon(count($geoLat) - 1, $geoLon, $geoLat, $currentSettings[$selectedProfile]['lon'], $currentSettings[$selectedProfile]['lat'])) continue;
-		
+
+		$paragraphs = linesToParagraphs(array_slice($weatherData, $messageStart, $messageEnd - $messageStart + 1), 0);
+		$alertPrint = "";
+		for($j = 0; $j < count($paragraphs); $j++)
+			$alertPrint = $alertPrint . $paragraphs[$j];
+
 		//Geolocation and time limits checked out OK; send warning to client
 		$returnData['weatherWarnings'][] = "<b>Alert type: </b>$alertType<br />" .
 			"<b>Issued By: </b>$issuingOffice<br />" .
 			"<b>Issue Time: </b>$issueTime<br />" .
-			linesToParagraphs(array_slice($weatherData, $messageStart, $messageEnd - $messageStart + 1), 0)[0];
+			"<b>Expire Time: </b>$expireTimePrint<br />" .
+			$alertPrint;
 	}
 	
 	//Special Weather Statements
@@ -1027,10 +1175,11 @@ elseif($_GET['type'] == "alertJSON")
 				$timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
 				$timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
 				$expireTime = $timestampFormatter->getTimestamp();
+				$expireTimePrint = date('gi A T D M j Y',$expireTime);
 				continue;
 			}
 			
-			//Find second timestamp
+			//Find second timestamp (removes weather zone and county/town identifier data, skipping to alert details)
 			if($messageStart == 0 && $issueTime != "" && stripos($weatherData[$i], $issueTime) !== false)
 			{
 				$messageStart = $i + 2;
@@ -1078,6 +1227,7 @@ elseif($_GET['type'] == "alertJSON")
 		$returnData['weatherWarnings'][] = "<b>Alert type: </b>Special Weather Statement<br />" .
 			"<b>Issued By: </b>$issuingOffice<br />" .
 			"<b>Issue Time: </b>$issueTime<br />" .
+                        "<b>Expire Time: </b>$expireTimePrint<br />" .
 			linesToParagraphs(array_slice($weatherData, $messageStart, $messageEnd - $messageStart + 1), 0)[0];
 	}
 	
@@ -1356,8 +1506,8 @@ elseif($_GET['type'] == "weatherJSON")
 		$returnData['localRadarMetadata']['title'] = "Local Composite Weather Radar";
 		$returnData['localRadarMetadata']['images'] = findMetadataEMWIN($allEmwinFiles, "RAD" . $currentSettings[$selectedProfile]['radarCode'] . ".GIF");
 	}
-	
-	//Current Weather Conditions
+
+    //Current Weather Conditions
 	$rwrFile = findNewestEMWIN($allEmwinFiles, "RWR".$currentSettings[$selectedProfile]['rwrOrig']);
 	if($rwrFile != "" && $currentSettings[$selectedProfile]['city'] != "")
 	{
