@@ -23,7 +23,6 @@ var config, responseData, selectedMenu;
 var programPath = document.currentScript.src.replace(location.protocol + "//" + location.hostname, "").split("script.js?v=")[0];
 programPath = programPath.substr(programPath.indexOf("/"));
 var siteName = window.matchMedia('(display-mode: standalone)').matches ? "" : " - " + document.title;
-var refreshCurrentWeather = null;
 var fixedProfileCount;
 
 //Load expanded cards from sessionStorage
@@ -660,11 +659,6 @@ function menuSelect(menuSlug)
 		window.scrollTo({top: 0});
 	}
 
-	else{
-		clearInterval(refreshCurrentWeather);
-		refreshCurrentWeather = null;
-	}
-	
 	//Clear any remaining lightGalleries
 	Object.keys(lightGalleries).forEach(thisGallery => {lightGalleries[thisGallery].destroy();});
 	lightGalleries = [];
@@ -687,54 +681,9 @@ function menuSelect(menuSlug)
 		renderStiffCard("forecastWeather", "Forecast");
 		if(config.showEmwinInfo) renderStiffCard("selectedProfile", "Profile Selector"); //Profile selector on Current-Weather
 
-		//Profile selector on Current-Weather
-		if(config.showEmwinInfo)
-		{
-				//Set up profile
-				selectedProfile = parseInt(getCookie('selectedProfile'));
-				currentSettings = decodeProfile(getCookie('localSettings'));
-				profileSelectorHolder = document.createElement('div');
-				profileSelectorHolder.className = 'prettyBoxList profileSelector';
-				profileSelectorHolder.innerHTML = "<span style='font-weight: bold;'>Profile: </span>";
+		//Setup profile selector, mode 0 for only changing saved profiles
+		if(config.showEmwinInfo) setUpProfileSelector(0)
 
-				profileSelector = document.createElement('select');
-				profileSelector.id = 'profileSelector';
-				profileSelector.style.minWidth = "30px";
-				thisProfile = 0;
-				currentSettings.forEach(profile => {
-						newOption = document.createElement('option');
-						newOption.value = thisProfile;
-						//Changed to support up to 10 preferred profiles, uncomment else ifs to add custom names to fixed profiles if the built in one isn't sufficient, names here will not override profiles that aren't fixed
-						if(thisProfile == 0) newOption.text = "Ground Station Defaults";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 1) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 2) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 3) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 4) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 5) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 6) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 7) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 8) newOption.text = "";
-						//else if(thisProfile<fixedProfileCount && thisProfile == 9) newOption.text = "";
-						else newOption.text = (profile.city == "" ? profile.wxZone : toTitleCase(profile.city)) + ", " + profile.stateAbbr;
-						profileSelector.appendChild(newOption);
-						thisProfile++;
-				});
-				profileSelector.selectedIndex = selectedProfile;
-				profileSelector.addEventListener('change', function(evt) {
-						lastRadarCode = currentSettings[selectedProfile].radarCode;
-
-						selectedProfile = document.getElementById('profileSelector').selectedIndex;
-						setCookie('selectedProfile', selectedProfile);
-
-						if(currentSettings[selectedProfile].radarCode != lastRadarCode) location.reload();
-						else menuSelect(selectedMenu);
-				});
-				profileSelectorHolder.appendChild(profileSelector);
-				target = document.getElementById('selectedProfileCardBody');
-				target.innerHTML = "";
-				target.appendChild(profileSelectorHolder);
-		}
-		
 		//Load Weather map
 		target = document.getElementById("radarWeatherCardBody");
 		if(config.localRadarVideo)
@@ -1635,82 +1584,8 @@ function menuSelect(menuSlug)
 		
 		if(config.showEmwinInfo)
 		{
-			//Set up profile
-			selectedProfile = parseInt(getCookie('selectedProfile'));
-			currentSettings = decodeProfile(getCookie('localSettings'));
-			profileSelectorHolder = document.createElement('div');
-			profileSelectorHolder.className = 'prettyBoxList profileSelector';
-			profileSelectorHolder.innerHTML = "<span style='font-weight: bold;'>Profile: </span>";
-			
-			profileSelector = document.createElement('select');
-			profileSelector.id = 'profileSelector';
-			profileSelector.style.minWidth = "30px";
-			thisProfile = 0;
-			currentSettings.forEach(profile => {
-				newOption = document.createElement('option');
-				newOption.value = thisProfile;
-				//Changed to support up to 10 preferred profiles, uncomment else ifs to add custom names to fixed profiles if the built in one isn't sufficient, names here will not override profiles that aren't fixed
-				if(thisProfile == 0) newOption.text = "Ground Station Defaults";
-				//else if(thisProfile<fixedProfileCount && thisProfile == 1) newOption.text = "";
-                //else if(thisProfile<fixedProfileCount && thisProfile == 2) newOption.text = "";
-                //else if(thisProfile<fixedProfileCount && thisProfile == 3) newOption.text = "";
-                //else if(thisProfile<fixedProfileCount && thisProfile == 4) newOption.text = "";
-				//else if(thisProfile<fixedProfileCount && thisProfile == 5) newOption.text = "";
-				//else if(thisProfile<fixedProfileCount && thisProfile == 6) newOption.text = "";
-				//else if(thisProfile<fixedProfileCount && thisProfile == 7) newOption.text = "";
-				//else if(thisProfile<fixedProfileCount && thisProfile == 8) newOption.text = "";
-				//else if(thisProfile<fixedProfileCount && thisProfile == 9) newOption.text = "";
-				else newOption.text = (profile.city == "" ? profile.wxZone : toTitleCase(profile.city)) + ", " + profile.stateAbbr;
-				profileSelector.appendChild(newOption);
-				thisProfile++;
-			});
-			profileSelector.selectedIndex = selectedProfile;
-			profileSelector.addEventListener('change', function(evt) {
-				lastRadarCode = currentSettings[selectedProfile].radarCode;
-				
-				selectedProfile = document.getElementById('profileSelector').selectedIndex;
-				setCookie('selectedProfile', selectedProfile);
-				
-				if(currentSettings[selectedProfile].radarCode != lastRadarCode) location.reload();
-				else menuSelect(selectedMenu);
-			});
-			profileSelectorHolder.appendChild(profileSelector);
-			
-			addNewButton = document.createElement('input');
-			addNewButton.id = "addNewButton";
-			addNewButton.type = "button";
-			addNewButton.value = "Add";
-			addNewButton.disabled = (currentSettings.length >= 10);
-			addNewButton.addEventListener('click', function() {
-				currentSettings.push(currentSettings[selectedProfile]);
-				setCookie("localSettings", encodeProfile(currentSettings));
-				setCookie("selectedProfile", currentSettings.length - 1);
-				menuSelect(selectedMenu);
-			});
-			profileSelectorHolder.appendChild(addNewButton);
-			
-			deleteButton = document.createElement('input');
-			deleteButton.id = "deleteButton";
-			deleteButton.type = "button";
-			deleteButton.value = "Delete";
-			deleteButton.style.color = "red";
-			deleteButton.addEventListener('click', function() {
-				lastRadarCode = currentSettings[selectedProfile].radarCode;
-				
-				currentSettings.splice(selectedProfile, 1);
-				selectedProfile = 0;
-				
-				setCookie("localSettings", encodeProfile(currentSettings));
-				setCookie("selectedProfile", selectedProfile);
-				
-				if(currentSettings[selectedProfile].radarCode != lastRadarCode) location.reload();
-				else menuSelect(selectedMenu);
-			});
-			profileSelectorHolder.appendChild(deleteButton);
-			
-			target = document.getElementById('selectedProfileCardBody');
-			target.innerHTML = "";
-			target.appendChild(profileSelectorHolder);
+			//Setup profile selector, mode 1 for local settings page
+			setUpProfileSelector(1)
 			
 			generalSettingsHolder = document.createElement('div');
 			generalSettingsHolder.className = 'prettyBoxList';
@@ -2384,6 +2259,92 @@ function switchRadarView(event)
 		else
 			me.parentNode.previousSibling.innerHTML = "<video controls loop autoplay playsinline style='width: 100%;'><source src='" + config.localRadarVideo + "' type='video/mp4' /></video>";
 	}
+}
+function setUpProfileSelector(mode)
+{
+		//Setup profile selector, mode 1 for local settings page, mode 0 for only changing saved profiles
+		
+		//Set up profile
+		selectedProfile = parseInt(getCookie('selectedProfile'));
+		currentSettings = decodeProfile(getCookie('localSettings'));
+		profileSelectorHolder = document.createElement('div');
+		profileSelectorHolder.className = 'prettyBoxList profileSelector';
+		if(mode==1) profileSelectorHolder.innerHTML = "<span style='font-weight: bold;'>Profile: </span>";
+		
+		profileSelector = document.createElement('select');
+		profileSelector.id = 'profileSelector';
+		profileSelector.style.minWidth = "30px";
+		thisProfile = 0;
+		currentSettings.forEach(profile => {
+				newOption = document.createElement('option');
+				newOption.value = thisProfile;
+				//Changed to support up to 10 preferred profiles, uncomment else ifs to add custom names to fixed profiles if the built in one isn't sufficient, names here will not override profiles that aren't fixed
+				if(thisProfile == 0) newOption.text = "Ground Station Defaults";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 1) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 2) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 3) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 4) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 5) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 6) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 7) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 8) newOption.text = "";
+				//else if(thisProfile<fixedProfileCount && thisProfile == 9) newOption.text = "";
+				else newOption.text = (profile.city == "" ? profile.wxZone : toTitleCase(profile.city)) + ", " + profile.stateAbbr;
+				profileSelector.appendChild(newOption);
+				thisProfile++;
+		});
+		profileSelector.selectedIndex = selectedProfile;
+		profileSelector.addEventListener('change', function(evt) {
+				lastRadarCode = currentSettings[selectedProfile].radarCode;
+		
+				selectedProfile = document.getElementById('profileSelector').selectedIndex;
+				setCookie('selectedProfile', selectedProfile);
+		
+				if(currentSettings[selectedProfile].radarCode != lastRadarCode) location.reload();
+				else menuSelect(selectedMenu);
+		});
+		profileSelectorHolder.appendChild(profileSelector);
+	
+        if(mode==1)
+        {
+                addNewButton = document.createElement('input');
+                addNewButton.id = "addNewButton";
+                addNewButton.type = "button";
+                addNewButton.value = "Add";
+                addNewButton.disabled = (currentSettings.length >= 10);
+                addNewButton.addEventListener('click', function() {
+                        currentSettings.push(currentSettings[selectedProfile]);
+                        setCookie("localSettings", encodeProfile(currentSettings));
+                        setCookie("selectedProfile", currentSettings.length - 1);
+                        menuSelect(selectedMenu);
+                });
+                profileSelectorHolder.appendChild(addNewButton);
+
+                deleteButton = document.createElement('input');
+                deleteButton.id = "deleteButton";
+                deleteButton.type = "button";
+                deleteButton.value = "Delete";
+                deleteButton.style.color = "red";
+                deleteButton.addEventListener('click', function() {
+                        lastRadarCode = currentSettings[selectedProfile].radarCode;
+
+                        currentSettings.splice(selectedProfile, 1);
+                        selectedProfile = 0;
+
+                        setCookie("localSettings", encodeProfile(currentSettings));
+                        setCookie("selectedProfile", selectedProfile);
+
+                        if(currentSettings[selectedProfile].radarCode != lastRadarCode) location.reload();
+                        else menuSelect(selectedMenu);
+                });
+                profileSelectorHolder.appendChild(deleteButton);
+        }
+
+        target = document.getElementById('selectedProfileCardBody');
+        target.innerHTML = "";
+        target.appendChild(profileSelectorHolder);
+
+        return target;
 }
 
 window.addEventListener("popstate", function(event){menuSelect(event.state.menuSlug);});
