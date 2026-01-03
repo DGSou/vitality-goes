@@ -1024,11 +1024,11 @@ elseif($_GET['type'] == "alertJSON")
 			//Check for HWO that indicates no current hazards
 			if(stripos($weatherData[$i], ".DAY ONE...") === 0)
 			{
-				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time.") $noHazards1 = 1;
+				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards1 = 1;
 			}
 			if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
 			{
-				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time.") $noHazards2_7 = 1;
+				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards2_7 = 1;
 			}
 
 			//Get end of message
