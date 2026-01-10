@@ -996,30 +996,61 @@ elseif($_GET['type'] == "alertJSON")
 				continue;
 			}
 
-                        //Find second timestamp (removes weather zone and county/town identifier data, skipping to alert details)
-                        if($issueTime != "" && stripos($weatherData[$i], $issueTime) !== false)
-                        {
-                                $messageStart = $i + 2;
-                                continue;
-                        }
-
 			//For Coastal Hazard Message, Flood Watch, Flash Flood Statement, Flood Advisory, Severe Weather Statment, Hazardous Weather Oulook
-                        //Get Header Information about weather warning, and beginning of message
-                        if(stripos($weatherData[$i], "Coastal Hazard Message") === 0 || stripos($weatherData[$i], "Flood Advisory") === 0|| stripos($weatherData[$i], "Flood Watch") === 0 || stripos($weatherData[$i], "Flash Flood Statement") === 0 || stripos($weatherData[$i], "Severe Weather Statment") === 0 || stripos($weatherData[$i], "Hazardous Weather Outlook") === 0)
-                        {
-                                $alertType = trim($weatherData[$i]);
-                                $issuingOffice = trim($weatherData[++$i]);
-                                $issueTime = trim($weatherData[++$i]);
+			//Get Header Information about weather warning, and beginning of message
+			if(stripos($weatherData[$i], "Coastal Hazard Message") === 0 || stripos($weatherData[$i], "Flood Advisory") === 0|| stripos($weatherData[$i], "Flood Watch") === 0 || stripos($weatherData[$i], "Flash Flood Statement") === 0 || stripos($weatherData[$i], "Severe Weather Statment") === 0 || stripos($weatherData[$i], "Hazardous Weather Outlook") === 0)
+			{
+					$alertType = trim($weatherData[$i]);
+					$issuingOffice = trim($weatherData[++$i]);
+					$issueTime = trim($weatherData[++$i]);
 
-                                if(substr($issueTime, 0, 9) === "Issued by")
-                                {
-                                        $issuingOffice = substr($issueTime, 10);
-                                        $issueTime = trim($weatherData[++$i]);
-                                }
+					if(substr($issueTime, 0, 9) === "Issued by")
+					{
+							$issuingOffice = substr($issueTime, 10);
+							$issueTime = trim($weatherData[++$i]);
+					}
 
-                                $messageStart = ++$i + 1;
-                                continue;
-                        }
+					$messageStart = ++$i + 1;
+					continue;
+			}
+
+			//Find weather zone line, then second timestamp
+			if(preg_match('/[A-Z]{3}[0-9]{3}/', substr(trim($weatherData[$i]),0,6)) == 1)
+			{
+					//Get expiry times from this line
+					if($issueTime != "" && $expireTime == -1 && preg_match("/([0-9]{6})-$/", trim($weatherData[$i]), $expireTimeStr))
+					{
+							//Get issue date
+							preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
+							$timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
+							$timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
+							$timestampFormatter->setTimezone(new DateTimeZone("UTC"));
+
+							//Based on issue date, get expire date
+							$monthOffset = 0;
+							$expireDate = intval(substr($expireTimeStr[1], 0, 2));
+							if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
+							$timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
+							$timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
+							$expireTime = $timestampFormatter->getTimestamp();
+							$expireTimePrint = date('gi A T D M j Y',$expireTime);
+					}
+
+					//Look for only the next timestamp
+					for($j=$i; $j<=count($weatherData); $j++)
+					{
+
+							if(stripos($weatherData[$j], $issueTime) !== false)
+							{
+									$descEnd = $j+1;
+									break;
+							}
+					}
+
+					//Clear all lines of weather zone and timestamp
+					for($j=$i; $j<=$descEnd; $j++) unset($weatherData[$j]);
+					$weatherData = array_values($weatherData);
+			}
 
 			//Check for HWO that indicates no current hazards
 			if(stripos($weatherData[$i], ".DAY ONE...") === 0)
@@ -1054,24 +1085,24 @@ elseif($_GET['type'] == "alertJSON")
 			}
 			
 			//Get expiry time, if not in "* Until" format
-                        if($issueTime != "" && $expireTime == -1 && preg_match("/([0-9]{6})-$/", trim($weatherData[$i]), $expireTimeStr))
-                        {
-                                //Get Issue Date
-                                preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
-                                $timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
-                                $timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
-                                $timestampFormatter->setTimezone(new DateTimeZone("UTC"));
+			if($issueTime != "" && $expireTime == -1 && preg_match("/([0-9]{6})-$/", trim($weatherData[$i]), $expireTimeStr))
+			{
+					//Get Issue Date
+					preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
+					$timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
+					$timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
+					$timestampFormatter->setTimezone(new DateTimeZone("UTC"));
 
-                                //Based on issue date, get expire date
-                                $monthOffset = 0;
-                                $expireDate = intval(substr($expireTimeStr[1], 0, 2));
-                                if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
-                                $timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
-                                $timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
-                                $expireTime = $timestampFormatter->getTimestamp();
-				$expireTimePrint = date('gi A T D M j Y',$expireTime);
-                                continue;
-                        }
+					//Based on issue date, get expire date
+					$monthOffset = 0;
+					$expireDate = intval(substr($expireTimeStr[1], 0, 2));
+					if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
+					$timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
+					$timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
+					$expireTime = $timestampFormatter->getTimestamp();
+					$expireTimePrint = date('gi A T D M j Y',$expireTime);
+					continue;
+			}
 
 			//Get geofencing of warning
 			if(stripos($weatherData[$i], "LAT...LON") === 0)
