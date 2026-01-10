@@ -1056,6 +1056,38 @@ elseif($_GET['type'] == "alertJSON")
 							}
 					}
 
+					//Look for wxZone of selected profile
+					if(substr(trim($weatherData[$i]),0,3) == substr($currentSettings[$selectedProfile]['wxZone'],0,3))
+					{
+							//Get first county or city of wxZone
+							$localZfpPath = findNewestEMWIN(scandir_recursive($config['general']['emwinPath'], $config['general']['fastEmwin']), "ZFP".$currentSettings[$selectedProfile]['orig']);
+							if(!$localZfpPath == "")
+							{
+									$localZfpArr = file($localZfpPath);
+									$j = 0;
+									foreach($localZfpArr as $thisLine)
+									{
+											if(str_contains($thisLine, $currentSettings[$selectedProfile]['wxZone']))
+											{
+													$CountyOrCity = str_replace(array("-", "..."), ", ", $localZfpArr[$j+1]);
+													$CountyOrCity = substr($CountyOrCity,0,strpos($CountyOrCity,","));
+											}
+											$j++;
+									}
+							}
+					}
+
+
+					//Look if weather zones includes current wxZone and indicate
+					for($j=$i; $j<=$descEnd; $j++)
+					{
+							if(stripos($weatherData[$j], $CountyOrCity) !== false)
+							{
+									$weatherData[$descEnd+1] = "*For Current WX Zone*<br>" . $weatherData[$descEnd+1];
+									break;
+							}
+					}
+
 					//Clear all lines of weather zone and timestamp
 					for($j=$i; $j<=$descEnd; $j++) unset($weatherData[$j]);
 					$weatherData = array_values($weatherData);
