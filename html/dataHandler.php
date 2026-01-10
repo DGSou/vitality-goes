@@ -1017,8 +1017,17 @@ elseif($_GET['type'] == "alertJSON")
 			//Find weather zone line, then second timestamp
 			if(preg_match('/[A-Z]{3}[0-9]{3}/', substr(trim($weatherData[$i]),0,6)) == 1)
 			{
+					//Look for expire time
+					for($j=$i; $j<=count($weatherData); $j++)
+					{
+							if(preg_match("/([0-9]{6})-$/", trim($weatherData[$j]), $expireTimeStr))
+							{
+									break;
+							}
+					}
+
 					//Get expiry times from this line
-					if($issueTime != "" && $expireTime == -1 && preg_match("/([0-9]{6})-$/", trim($weatherData[$i]), $expireTimeStr))
+					if($issueTime != "" && $expireTime == -1 && isset($expireTimeStr))
 					{
 							//Get issue date
 							preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
