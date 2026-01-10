@@ -1069,8 +1069,11 @@ elseif($_GET['type'] == "alertJSON")
 									{
 											if(str_contains($thisLine, $currentSettings[$selectedProfile]['wxZone']))
 											{
-													$CountyOrCity = str_replace(array("-", "..."), ", ", $localZfpArr[$j+1]);
-													$CountyOrCity = substr($CountyOrCity,0,strpos($CountyOrCity,","));
+													$Counties = str_replace(array("-", "..."), ", ", $localZfpArr[$j+1]);
+													//First county only
+													$County = substr($Counties,0,strpos($Counties,","));
+													//All counties
+													$Counties = substr($Counties,0,strpos($Counties,", \r"));
 											}
 											$j++;
 									}
@@ -1081,9 +1084,12 @@ elseif($_GET['type'] == "alertJSON")
 					//Look if weather zones includes current wxZone and indicate
 					for($j=$i; $j<=$descEnd; $j++)
 					{
-							if(stripos($weatherData[$j], $CountyOrCity) !== false)
+							if(stripos($weatherData[$j], $County) !== false)
 							{
-									$weatherData[$descEnd+1] = "*For Current WX Zone*<br>" . $weatherData[$descEnd+1];
+									//If equal, only one county  
+									if($Counties === $County) $weatherData[$descEnd+1] = "*For Current Profile : " . $Counties . " County<br>". $weatherData[$descEnd+1];
+									//Else, multiple counties
+									else $weatherData[$descEnd+1] = "*For Current Profile : " . $Counties . " Counties<br>". $weatherData[$descEnd+1];
 									break;
 							}
 					}
