@@ -1082,10 +1082,12 @@ elseif($_GET['type'] == "alertJSON")
 
 
 					//Look if weather zones includes current wxZone and indicate
+					$profileMatch=false;
 					for($j=$i; $j<=$descEnd; $j++)
 					{
 							if(stripos($weatherData[$j], $County) !== false)
 							{
+									$profileMatch=true;
 									//If equal, only one county  
 									if($Counties === $County) $weatherData[$descEnd+1] = "*For Current Profile : " . $Counties . " County<br>". $weatherData[$descEnd+1];
 									//Else, multiple counties
@@ -1093,6 +1095,7 @@ elseif($_GET['type'] == "alertJSON")
 									break;
 							}
 					}
+					if(!$profileMatch) $weatherData[$descEnd+1] = "*NOT For Current Profile<br>". $weatherData[$descEnd+1];
 
 					//Clear all lines of weather zone and timestamp
 					for($j=$i; $j<=$descEnd; $j++) unset($weatherData[$j]);
