@@ -1207,6 +1207,11 @@ elseif($_GET['type'] == "alertJSON")
 					$i++;
 					continue;
 				}
+				else
+				{
+					$messageEnd = $i;
+					break;
+				}
     		}
 		}
 		
