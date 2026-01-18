@@ -945,6 +945,7 @@ elseif($_GET['type'] == "alertJSON")
 		$expireTime = -1;
 		$noHazards1 = 0;
 		$noHazards2_7 = 0;
+		$noSpotter = 0;
 		for($i = 0; $i < count($weatherData); $i++)
 		{
 			//For BULLETIN messages
@@ -1134,6 +1135,7 @@ elseif($_GET['type'] == "alertJSON")
 			if(stripos($weatherData[$i], ".SPOTTER ") === 0)
 			{
 				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+				if(trim($weatherData[$i+2]) == "Spotter activation is not expected at this time." || trim($weatherData[$i+2]) == "Spotter activation will not be needed through tonight.") $noSpotter = 1;
 			}
 
 			//Get end of message
@@ -1223,7 +1225,7 @@ elseif($_GET['type'] == "alertJSON")
 		}
 		
 		//Run checks to see if execution should continue
-		if($noHazards1 && $noHazards2_7) continue;
+		if($noHazards1 && $noHazards2_7 && $noSpotter) continue;
 		if(isset($expireTime) && time() > $expireTime) continue;
 		if(isset($geoLat) && isset($geoLon) &&
 			array_key_exists('lat', $currentSettings[$selectedProfile]) && 
