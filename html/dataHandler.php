@@ -1120,13 +1120,20 @@ elseif($_GET['type'] == "alertJSON")
 			}
 
 			//Check for HWO that indicates no current hazards
+			//Also underline key sections for visual clarity
 			if(stripos($weatherData[$i], ".DAY ONE...") === 0)
 			{
+				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
 				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards1 = 1;
 			}
 			if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
 			{
+				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
 				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards2_7 = 1;
+			}
+			if(stripos($weatherData[$i], ".SPOTTER ") === 0)
+			{
+				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
 			}
 
 			//Get end of message
@@ -1222,6 +1229,7 @@ elseif($_GET['type'] == "alertJSON")
 			array_key_exists('lat', $currentSettings[$selectedProfile]) && 
 			array_key_exists('lon', $currentSettings[$selectedProfile]) && 
 			!is_in_polygon(count($geoLat) - 1, $geoLon, $geoLat, $currentSettings[$selectedProfile]['lon'], $currentSettings[$selectedProfile]['lat'])) continue;
+		if($messageEnd <= $messageStart) continue;
 
 		$paragraphs = linesToParagraphs(array_slice($weatherData, $messageStart, $messageEnd - $messageStart + 1), 0);
 		$alertPrint = "";
