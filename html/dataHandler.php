@@ -887,6 +887,7 @@ elseif($_GET['type'] == "alertJSON")
 {
 	$returnData = [];
 	$latestHurricaneMessage = 0;
+	$latestHWOExpireTime = 0;
 	$returnData['localEmergencies'] = $returnData['blueAlerts'] = $returnData['amberAlerts'] = $returnData['civilDangerWarnings'] = 
 		$returnData['localEvacuations'] = $returnData['hurricaneStatement'] = $returnData['weatherWarnings'] = $returnData['spaceWeatherAlerts'] = [];
 	
@@ -946,6 +947,8 @@ elseif($_GET['type'] == "alertJSON")
 		$noHazards1 = 0;
 		$noHazards2_7 = 0;
 		$noSpotter = 0;
+		$isHWO = 0;
+		$skipHWO = 0;
 		for($i = 0; $i < count($weatherData); $i++)
 		{
 			//For BULLETIN messages
@@ -1000,6 +1003,8 @@ elseif($_GET['type'] == "alertJSON")
 			//Get Header Information about weather warning, and beginning of message
 			if(stripos($weatherData[$i], "Coastal Hazard Message") === 0 || stripos($weatherData[$i], "Flood Advisory") === 0|| stripos($weatherData[$i], "Flood Watch") === 0 || stripos($weatherData[$i], "Flash Flood Statement") === 0 || stripos($weatherData[$i], "Severe Weather Statment") === 0 || stripos($weatherData[$i], "Hazardous Weather Outlook") === 0 || stripos($weatherData[$i], "Special Weather Statement") === 0)
 			{
+					if(stripos($weatherData[$i], "Hazardous Weather Outlook") === 0) $isHWO = 1;
+
 					$alertType = trim($weatherData[$i]);
 					$issuingOffice = trim($weatherData[++$i]);
 					$issueTime = trim($weatherData[++$i]);
@@ -1011,6 +1016,7 @@ elseif($_GET['type'] == "alertJSON")
 					}
 
 					$messageStart = ++$i + 1;
+				
 					continue;
 			}
 
@@ -1120,22 +1126,29 @@ elseif($_GET['type'] == "alertJSON")
 					continue;
 			}
 
-			//Check for HWO that indicates no current hazards
-			//Also underline key sections for visual clarity
-			if(stripos($weatherData[$i], ".DAY ONE...") === 0)
+			//For HWO
+			//Check for HWO that indicates no current hazards and no spotter activation
+			//Underline key sections for visual clarity
+			//Only keep most recent HWO (lines up with NWS usage of HWO)
+			if($isHWO)
 			{
-				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
-				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards1 = 1;
-			}
-			if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
-			{
-				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
-				if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards2_7 = 1;
-			}
-			if(stripos($weatherData[$i], ".SPOTTER ") === 0)
-			{
-				$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
-				if(trim($weatherData[$i+2]) == "Spotter activation is not expected at this time." || trim($weatherData[$i+2]) == "Spotter activation will not be needed through tonight.") $noSpotter = 1;
+					if(stripos($weatherData[$i], ".DAY ONE...") === 0)
+					{
+						$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+						if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards1 = 1;
+					}
+					if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
+					{
+						$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+						if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards2_7 = 1;
+					}
+					if(stripos($weatherData[$i], ".SPOTTER ") === 0)
+					{
+						$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+						if(trim($weatherData[$i+2]) == "Spotter activation is not expected at this time." || trim($weatherData[$i+2]) == "Spotter activation will not be needed through tonight.") $noSpotter = 1;
+					}
+					if($expireTime < $latestHWOExpireTime) $skipHWO = 1;
+					else $latestHWOExpireTime = $expireTime;
 			}
 
 			//Get end of message
@@ -1225,7 +1238,7 @@ elseif($_GET['type'] == "alertJSON")
 		}
 		
 		//Run checks to see if execution should continue
-		if($noHazards1 && $noHazards2_7 && $noSpotter) continue;
+		if( ($noHazards1 && $noHazards2_7 && $noSpotter) || ($isHWO && $skipHWO) ) continue;
 		if(isset($expireTime) && time() > $expireTime) continue;
 		if(isset($geoLat) && isset($geoLon) &&
 			array_key_exists('lat', $currentSettings[$selectedProfile]) && 
@@ -1247,9 +1260,41 @@ elseif($_GET['type'] == "alertJSON")
 	}
 		
 	//Space Weather Alerts, if enabled
+	//Modified to only show newest of Alerts and Watches, to prevent too many messages appearing
 	if($config['general']['spaceWeatherAlerts'])
 	{
-		$swFiles = preg_grep("/-(ALT(K07|K08|K09)|WAT(A50|A99))US\.TXT$/i", $allEmwinFiles);
+		//$swFiles = preg_grep("/-(ALT(K07|K08|K09)|WAT(A50|A99))US\.TXT$/i", $allEmwinFiles);
+		$swALTFiles = preg_grep("/-(ALT(K07|K08|K09))US\.TXT$/i", $allEmwinFiles);
+		$swWATFiles = preg_grep("/-(WAT(A50|A99))US\.TXT$/i", $allEmwinFiles);
+
+		$path = null;
+		foreach($swALTFiles as $thisFile)
+		{
+				$fileNameParts = explode("_", basename($thisFile));
+				if(count($fileNameParts) != 6) continue;
+
+				if($fileNameParts[4] > $highestImage)
+				{
+						$path = $thisFile;
+						$highestImage = $fileNameParts[4];
+				}
+		}
+		if(isset($path)) $swFiles[] = $path;
+
+		$path = null;
+		foreach($swWATFiles as $thisFile)
+		{
+				$fileNameParts = explode("_", basename($thisFile));
+				if(count($fileNameParts) != 6) continue;
+
+				if($fileNameParts[4] > $highestImage)
+				{
+						$path = $thisFile;
+						$highestImage = $fileNameParts[4];
+				}
+		}
+		if(isset($path)) $swFiles[] = $path;
+
 		foreach($swFiles as $thisFile) $returnData['spaceWeatherAlerts'] = array_merge($returnData['spaceWeatherAlerts'], linesToParagraphs(file($thisFile), 3));
 	}
 	
