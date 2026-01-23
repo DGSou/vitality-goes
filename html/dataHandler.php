@@ -888,6 +888,7 @@ elseif($_GET['type'] == "alertJSON")
 	$returnData = [];
 	$latestHurricaneMessage = 0;
 	$latestHWOExpireTime = 0;
+	$HWOAlertNum = null;
 	$returnData['localEmergencies'] = $returnData['blueAlerts'] = $returnData['amberAlerts'] = $returnData['civilDangerWarnings'] = 
 		$returnData['localEvacuations'] = $returnData['hurricaneStatement'] = $returnData['weatherWarnings'] = $returnData['spaceWeatherAlerts'] = [];
 	
@@ -1251,12 +1252,30 @@ elseif($_GET['type'] == "alertJSON")
 		for($j = 0; $j < count($paragraphs); $j++)
 			$alertPrint = $alertPrint . $paragraphs[$j];
 
-		//Geolocation and time limits checked out OK; send warning to client
-		$returnData['weatherWarnings'][] = "<b>Alert type: </b>$alertType<br />" .
-			"<b>Issued By: </b>$issuingOffice<br />" .
-			"<b>Issue Time: </b>$issueTime<br />" .
-			"<b>Expire Time: </b>$expireTimePrint<br />" .
-			$alertPrint;
+		//If newer HWO is found, replace it
+		if(isset($HWOAlertNum) && $isHWO && !$skipHWO)
+		{
+			$returnData['weatherWarnings'][$HWOAlertNum] = "<b>Alert type: </b>$alertType<br />" .
+					"<b>Issued By: </b>$issuingOffice<br />" .
+					"<b>Issue Time: </b>$issueTime<br />" .
+					"<b>Expire Time: </b>$expireTimePrint<br />" .
+					$alertPrint;
+
+		}
+
+		//Otherwise, append alert as normal
+		else
+		{
+			//Geolocation and time limits checked out OK; send warning to client
+			$returnData['weatherWarnings'][] = "<b>Alert type: </b>$alertType<br />" .
+				"<b>Issued By: </b>$issuingOffice<br />" .
+				"<b>Issue Time: </b>$issueTime<br />" .
+				"<b>Expire Time: </b>$expireTimePrint<br />" .
+				$alertPrint;
+		}
+
+		//Save HWO alert number for overwriting if needed
+		if($isHWO && !isset($HWOAlertNum)) $HWOAlertNum = count($returnData['weatherWarnings'])-1;
 	}
 		
 	//Space Weather Alerts, if enabled
@@ -1278,6 +1297,8 @@ elseif($_GET['type'] == "alertJSON")
 						$path = $thisFile;
 						$highestImage = $fileNameParts[4];
 				}
+				//Remove any space weather messages over 6 hours old
+				if($fileNameParts[4]>strtotime('+6 hours')) $path = null;
 		}
 		if(isset($path)) $swFiles[] = $path;
 
@@ -1292,6 +1313,8 @@ elseif($_GET['type'] == "alertJSON")
 						$path = $thisFile;
 						$highestImage = $fileNameParts[4];
 				}
+				//Remove any space weather messages over 6 hours old
+				if($fileNameParts[4]>strtotime('+6 hours')) $path = null;
 		}
 		if(isset($path)) $swFiles[] = $path;
 
