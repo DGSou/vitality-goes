@@ -945,224 +945,81 @@ elseif($_GET['type'] == "alertJSON")
 		$weatherData = file($thisFile);
 		$messageStart = $messageEnd = 0;
 		$expireTime = -1;
+        $expireTimeStr = null;
 		$noHazards1 = 0;
 		$noHazards2_7 = 0;
-		$noSpotter = 0;
-		$isHWO = 0;
-		$skipHWO = 0;
+		$noSpotter = 1;
+		$skip = 0;
+        $issueTime = null;
+        $descEnd = null;
+        $messageEnd = null;
+        $profileMatch = false;
+
+		//Find alert type, issue time, expire time, geofencing, descEnd, weather zone
 		for($i = 0; $i < count($weatherData); $i++)
 		{
-			//For BULLETIN messages
-			//Get Header Information about weather warning, and beginning of message
-			if(stripos($weatherData[$i], "BULLETIN - ") === 0 || ($messageStart == 0 && stripos($weatherData[$i], "Dust Advisory") === 0))
-			{
-				if($messageStart == 0 && stripos($weatherData[$i], "Dust Advisory") === 0) $i++;
-				$alertType = trim($weatherData[++$i]);
-				$issuingOffice = trim($weatherData[++$i]);
-				$issueTime = trim($weatherData[++$i]);
+            //Alert code
+		    if(preg_match("/[A-Z]{6}/", substr(trim($weatherData[$i]),0,6)) == 1)
+		    {
+                if(substr(trim($weatherData[$i]),3,6) == substr($currentSettings[$selectedProfile]['orig'],0,3)) $alertCode = substr(trim($weatherData[$i]),0,3);
+            }
 
-				if(substr($issueTime, 0, 9) === "Issued by")
+            //Issuing office and alert type
+            if(substr($weatherData[$i], 0, 24) === "National Weather Service")
+            {
+                $issuingOffice = trim($weatherData[$i]);
+                $alertType = trim($weatherData[$i-1]);
+            }
+
+            //If relayed message, update issuing office
+            if(substr($weatherData[$i], 0, 9) === "Issued by") $issuingOffice = substr($weatherData[$i], 10);
+
+            //Issue time (only the first copy)
+            if(preg_match("/[0-9]{3,4} [A,P]M [A-Z]{3} [M,T,W,F,S][a-z]{2} [A-Z][a-z]{2} [0-9]{1,2} [0-9]{4}/", trim($weatherData[$i])) == 1)
+            {
+                if(!isset($issueTime)) $issueTime = trim($weatherData[$i]);
+            }
+
+            //Expire time
+            if(preg_match('/[A-Z]{3}[0-9]{3}/', substr(trim($weatherData[$i]),0,6)) == 1)
+            {
+                //Look for expire time
+                for($j=$i; $j<count($weatherData); $j++)
+                {
+                    if(preg_match("/([0-9]{6})-$/", trim($weatherData[$j]), $expireTimeStr)) break;
+                }
+
+                if(isset($issueTime) && $expireTime == -1 && isset($expireTimeStr))
+                {
+                    //Get issue date
+                    preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
+                    $timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
+                    $timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
+                    $timestampFormatter->setTimezone(new DateTimeZone("UTC"));
+
+                    //Based on issue date, get expire date
+                    $monthOffset = 0;
+                    $expireDate = intval(substr($expireTimeStr[1], 0, 2));
+                    if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
+                    $timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
+                    $timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
+                    $expireTime = $timestampFormatter->getTimestamp();
+                    $expireTimePrint = date('gi A T D M j Y',$expireTime);
+                }
+
+				//Look for description end
+				for($j=$i; $j<count($weatherData); $j++)
 				{
-					$issuingOffice = substr($issueTime, 10);
-					$issueTime = trim($weatherData[++$i]);
-				}
-
-				$messageStart = ++$i + 1;
-				continue;
-			}
-
-			//For URGENT messages
-			//Get Header Information about weather warning, and beginning of message
-			if(stripos($weatherData[$i], "URGENT - ") === 0)
-			{
-				if(stripos($weatherData[$i], "URGENT - IMMEDIATE BROADCAST REQUESTED") === 0)
-				{
-					$alertType = trim($weatherData[++$i]);
-					if(empty($alertType)) $alertType = trim($weatherData[++$i]);
-                                	$issuingOffice = trim($weatherData[++$i]);
-					$issueTime = trim($weatherData[++$i]);
-					if(substr($issueTime, 0, 10) === "Relayed by") $issueTime = trim($weatherData[++$i]);
-				}
-
-				else{
-					$alertType = trim(substr($weatherData[$i],9));
-					$issuingOffice = trim($weatherData[++$i]);
-					$issueTime = trim($weatherData[++$i]);
-
-					if(substr($issueTime, 0, 9) === "Issued by")
+					if(stripos($weatherData[$j], $issueTime) !== false)
 					{
-						$issuingOffice = substr($issueTime, 10);
-						$issueTime = trim($weatherData[++$i]);
+						$descEnd = $j+1;
+						break;
 					}
 				}
+            }
 
-				$messageStart = ++$i + 1;
-				continue;
-			}
-
-			//For Coastal Hazard Message, Flood Watch, Flash Flood Statement, Flood Advisory, Severe Weather Statment, Hazardous Weather Oulook
-			//Get Header Information about weather warning, and beginning of message
-			if(stripos($weatherData[$i], "Coastal Hazard Message") === 0 || stripos($weatherData[$i], "Flood Advisory") === 0|| stripos($weatherData[$i], "Flood Watch") === 0 || stripos($weatherData[$i], "Flash Flood Statement") === 0 || stripos($weatherData[$i], "Severe Weather Statment") === 0 || stripos($weatherData[$i], "Hazardous Weather Outlook") === 0 || stripos($weatherData[$i], "Special Weather Statement") === 0)
-			{
-					if(stripos($weatherData[$i], "Hazardous Weather Outlook") === 0) $isHWO = 1;
-
-					$alertType = trim($weatherData[$i]);
-					$issuingOffice = trim($weatherData[++$i]);
-					$issueTime = trim($weatherData[++$i]);
-
-					if(substr($issueTime, 0, 9) === "Issued by")
-					{
-							$issuingOffice = substr($issueTime, 10);
-							$issueTime = trim($weatherData[++$i]);
-					}
-
-					$messageStart = ++$i + 1;
-				
-					continue;
-			}
-
-			//Find weather zone line, then second timestamp
-			if(preg_match('/[A-Z]{3}[0-9]{3}/', substr(trim($weatherData[$i]),0,6)) == 1)
-			{
-					//Look for expire time
-					for($j=$i; $j<=count($weatherData); $j++)
-					{
-							if(preg_match("/([0-9]{6})-$/", trim($weatherData[$j]), $expireTimeStr)) break;
-					}
-
-					//Get expiry times from this line
-					if($issueTime != "" && $expireTime == -1 && isset($expireTimeStr))
-					{
-							//Get issue date
-							preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
-							$timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
-							$timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
-							$timestampFormatter->setTimezone(new DateTimeZone("UTC"));
-
-							//Based on issue date, get expire date
-							$monthOffset = 0;
-							$expireDate = intval(substr($expireTimeStr[1], 0, 2));
-							if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
-							$timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
-							$timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
-							$expireTime = $timestampFormatter->getTimestamp();
-							$expireTimePrint = date('gi A T D M j Y',$expireTime);
-					}
-
-					//Look for only the next timestamp
-					for($j=$i; $j<=count($weatherData); $j++)
-					{
-
-							if(stripos($weatherData[$j], $issueTime) !== false)
-							{
-									$descEnd = $j+1;
-									break;
-							}
-					}
-
-					//Look for wxZone of selected profile
-					if(substr(trim($weatherData[$i]),0,3) == substr($currentSettings[$selectedProfile]['wxZone'],0,3))
-					{
-							//Get first county or city of wxZone
-							$localZfpPath = findNewestEMWIN(scandir_recursive($config['general']['emwinPath'], $config['general']['fastEmwin']), "ZFP".$currentSettings[$selectedProfile]['orig']);
-							if(!$localZfpPath == "")
-							{
-									$localZfpArr = file($localZfpPath);
-									$j = 0;
-									foreach($localZfpArr as $thisLine)
-									{
-											if(str_contains($thisLine, $currentSettings[$selectedProfile]['wxZone']))
-											{
-													$Counties = str_replace(array("-", "..."), ", ", $localZfpArr[$j+1]);
-													//First county only
-													$County = substr($Counties,0,strpos($Counties,","));
-													//All counties
-													$Counties = substr($Counties,0,strpos($Counties,", \r"));
-											}
-											$j++;
-									}
-							}
-					}
-
-
-					//Look if weather zones includes current wxZone and indicate
-					$profileMatch=false;
-					for($j=$i; $j<=$descEnd; $j++)
-					{
-							if(stripos($weatherData[$j], $County) !== false)
-							{
-									$profileMatch=true;
-									//If equal, only one county  
-									if($Counties === $County) $weatherData[$descEnd+1] = "*For " . $Counties . " County<br>". $weatherData[$descEnd+1];
-									//Else, multiple counties
-									else $weatherData[$descEnd+1] = "*For " . $Counties . " Counties<br>". $weatherData[$descEnd+1];
-									break;
-							}
-					}
-					if(!$profileMatch)
-					{
-							//Look for message component end
-							for($j=$i; $j<count($weatherData); $j++)
-							{
-									if(stripos($weatherData[$j], "$$") !== false)
-									{
-											$messageComponentEnd = $j-1;
-											break;
-									}
-							}
-					}
-
-					//Clear all lines of weather, timestamp, and extra messages then reset $i to account for removed lines
-					if($profileMatch)
-					{
-							for($j=$i; $j<=$descEnd; $j++) unset($weatherData[$j]);
-							$i -= ($descEnd - $i);
-					}
-					else
-					{
-							for($j=$i; $j<=$messageComponentEnd; $j++) unset($weatherData[$j]);
-							$i -= ($messageComponentEnd - $i);
-					}
-					$weatherData = array_values($weatherData);
-					continue;
-			}
-
-			//For HWO
-			//Check for HWO that indicates no current hazards and no spotter activation
-			//Underline key sections for visual clarity
-			//Only keep most recent HWO (lines up with NWS usage of HWO)
-			if($isHWO)
-			{
-					if(stripos($weatherData[$i], ".DAY ONE...") === 0)
-					{
-						$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
-						if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards1 = 1;
-					}
-					if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
-					{
-						$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
-						if(trim($weatherData[$i+2]) == "No hazardous weather is expected at this time." || trim($weatherData[$i+2]) == "Hazardous weather is not expected at this time." || trim($weatherData[$i+2]) == "The probability for widespread hazardous weather is low.") $noHazards2_7 = 1;
-					}
-					if(stripos($weatherData[$i], ".SPOTTER ") === 0)
-					{
-						$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
-						if(trim($weatherData[$i+2]) == "Spotter activation is not expected at this time." || trim($weatherData[$i+2]) == "Spotter activation will not be needed through tonight.") $noSpotter = 1;
-					}
-					if($expireTime < $latestHWOExpireTime) $skipHWO = 1;
-					else $latestHWOExpireTime = $expireTime;
-			}
-
-			//Get end of message
-			if(trim($weatherData[$i]) == "&&")
-			{
-				$weatherData[$i] = "";
-				if(strlen(trim($weatherData[$i+2]))) $weatherData[$i+2] = "";
-				$messageEnd = $i - 1;
-				continue;
-			}
-
-			//Get expiry time
-			if(stripos($weatherData[$i], "* Until") === 0)
+            //Expire time "* Until" format (overwrite other mode)
+            if(stripos($weatherData[$i], "* Until") === 0)
 			{
 				//Convert issue time to something PHP can understand
 				preg_match("/^(?<time>[0-9]* [A-Z]*)(\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $issueTimeParts);
@@ -1173,28 +1030,8 @@ elseif($_GET['type'] == "alertJSON")
 				$expireTime = strtotime($expireTimeStr, strtotime($issueTimeParts['date']." ".$issueTimeParts['time']));
 				$expireTimePrint = date('gi A T D M j Y',$expireTime);
 			}
-			
-			//Get expiry time, if not in "* Until" format
-			if($issueTime != "" && $expireTime == -1 && preg_match("/([0-9]{6})-$/", trim($weatherData[$i]), $expireTimeStr))
-			{
-					//Get Issue Date
-					preg_match("/^(?<time>[0-9]* [A-Z]*)(?<timezone>\s+[A-Z]*\s+)(?<date>.*)$/i", $issueTime, $timeParts);
-					$timeParts['time'] = substr_replace($timeParts['time'], ":", -5, 0);
-					$timestampFormatter = new DateTime($timeParts['date'] . ' ' . $timeParts['time'], new DateTimeZone(trim($timeParts['timezone'])));
-					$timestampFormatter->setTimezone(new DateTimeZone("UTC"));
 
-					//Based on issue date, get expire date
-					$monthOffset = 0;
-					$expireDate = intval(substr($expireTimeStr[1], 0, 2));
-					if($expireDate < intval($timestampFormatter->format('j'))) $monthOffset = 1;
-					$timestampFormatter->setDate($timestampFormatter->format('Y'), intval($timestampFormatter->format('n')) + $monthOffset, $expireDate);
-					$timestampFormatter->setTime(substr($expireTimeStr[1], 2, 2), substr($expireTimeStr[1], 4, 2));
-					$expireTime = $timestampFormatter->getTimestamp();
-					$expireTimePrint = date('gi A T D M j Y',$expireTime);
-					continue;
-			}
-
-			//Get geofencing of warning
+			//Geofencing
 			if(stripos($weatherData[$i], "LAT...LON") === 0)
 			{
 				$nextString = trim(str_replace("LAT...LON", "", $weatherData[$i]));
@@ -1211,39 +1048,75 @@ elseif($_GET['type'] == "alertJSON")
 					
 					//Get next line of geofence (if any)
 					$nextString = trim($weatherData[++$i]);
-					if(stripos($nextString, "TIME...MOT...LOC") === 0 || trim($nextString) == "&&") break 2;
+					if(stripos($nextString, "TIME...MOT...LOC") === 0 || trim($nextString) == "&&") break;
 				}
 			}
 
-			//Get real end of message
-            if(trim($weatherData[$i]) == "$$")
+            //Weather Zone
+            //If matches wxZone, keep message and indicate
+            if(stripos($weatherData[$i],$County) !== false)
             {
-				//end of file, all done
-				if($i+1 == count($weatherData))
+                //$profileMatch = true;
+                if(!$profileMatch)
+		        {
+			        //If equal, only one county
+                	if($Counties === $County) $weatherData[$descEnd+1] = "*For " . $Counties . " County<br>". $weatherData[$descEnd+1];
+                	//Else, multiple counties
+			        else $weatherData[$descEnd+1] = "*For " . $Counties . " Counties<br>". $weatherData[$descEnd+1];
+		        }
+		        $profileMatch = true;
+            }
+
+            //Message end
+            if(trim($weatherData[$i]) == "$$") $messageEnd = $i-2;
+
+        }
+
+        //Start of weather message
+        if(isset($descEnd)) $messageStart = $descEnd+1;
+
+	    //If message doesn't match wxZone, skip it
+	    if(!$profileMatch) $skip = 1;
+
+        //HWO message extra handling and filtering
+        if($alertCode == "HWO")
+        {
+            //Check for "blank" HWO message
+            $noHazards1 = 0;
+            $noHazards2_7 = 0;
+            $noSpotter = 0;
+            for($i = 0; $i < count($weatherData); $i++)
+		    {
+                if(stripos($weatherData[$i], ".DAY ONE...") === 0)
 				{
-				    if($messageEnd == 0) $messageEnd = $i-1;
-					break;
+                    $weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+                    if(in_array(trim($weatherData[$i+2]), array("No hazardous weather is expected at this time.","Hazardous weather is not expected at this time.","The probability for widespread hazardous weather is low.","Widespread hazardous weather is not expected at this time."))) $noHazards1 = 1;
+
 				}
-				//multipart message (ignore initials), continue
-				else if(strlen(trim($weatherData[$i+2]))>3)
+                if(stripos($weatherData[$i], ".DAYS TWO ") === 0)
 				{
-					$i++;
-					continue;
+					$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+					if(in_array(trim($weatherData[$i+2]), array("No hazardous weather is expected at this time.","Hazardous weather is not expected at this time.","The probability for widespread hazardous weather is low.","Widespread hazardous weather is not expected at this time."))) $noHazards2_7 = 1;
 				}
-				else
-				{
-					$messageEnd = $i;
-					break;
+                if(stripos($weatherData[$i], ".SPOTTER ") === 0)
+            	{
+               		$weatherData[$i] = "<u>" . $weatherData[$i] . "</u>";
+                    if(in_array(trim($weatherData[$i+2]), array("Spotter activation is not expected at this time.","Spotter activation will not be needed through tonight."))) $noSpotter = 1;
 				}
-    		}
-		}
-		
+            }
+            if($noHazards1 && $noHazards2_7 && $noSpotter) $skip = 1;
+
+            //Only keep most recent HWO message
+		    if($expireTime < $latestHWOExpireTime) $skip = 1;
+			else $latestHWOExpireTime = $expireTime;
+        }
+
 		//Run checks to see if execution should continue
-		if( ($noHazards1 && $noHazards2_7 && $noSpotter) || ($isHWO && $skipHWO) ) continue;
+		if($skip) continue;
 		if(isset($expireTime) && time() > $expireTime) continue;
 		if(isset($geoLat) && isset($geoLon) &&
-			array_key_exists('lat', $currentSettings[$selectedProfile]) && 
-			array_key_exists('lon', $currentSettings[$selectedProfile]) && 
+			array_key_exists('lat', $currentSettings[$selectedProfile]) &&
+			array_key_exists('lon', $currentSettings[$selectedProfile]) &&
 			!is_in_polygon(count($geoLat) - 1, $geoLon, $geoLat, $currentSettings[$selectedProfile]['lon'], $currentSettings[$selectedProfile]['lat'])) continue;
 		if($messageEnd <= $messageStart) continue;
 
@@ -1252,21 +1125,24 @@ elseif($_GET['type'] == "alertJSON")
 		for($j = 0; $j < count($paragraphs); $j++)
 			$alertPrint = $alertPrint . $paragraphs[$j];
 
-		//If newer HWO is found, replace it
-		if(isset($HWOAlertNum) && $isHWO && !$skipHWO)
-		{
-			$returnData['weatherWarnings'][$HWOAlertNum] = "<b>Alert type: </b>$alertType<br />" .
-					"<b>Issued By: </b>$issuingOffice<br />" .
-					"<b>Issue Time: </b>$issueTime<br />" .
-					"<b>Expire Time: </b>$expireTimePrint<br />" .
-					$alertPrint;
+		//Prevent multiple copies of weather alerts, cause of duplicate files uncertain, but external to Vitality GOES
+		if(in_array($alertPrint, $weatherAlertPrint)) continue;
+		$weatherAlertPrint[] = $alertPrint;
 
+		//If newer HWO is found, replace it
+		if(isset($HWOAlertNum) && $alertCode == "HWO" && !$skip)
+		{
+            $returnData['weatherWarnings'][$HWOAlertNum] = "<b>Alert type: </b>$alertType<br />" .
+                "<b>Issued By: </b>$issuingOffice<br />" .
+                "<b>Issue Time: </b>$issueTime<br />" .
+                "<b>Expire Time: </b>$expireTimePrint<br />" .
+                $alertPrint;
 		}
 
 		//Otherwise, append alert as normal
 		else
 		{
-			//Geolocation and time limits checked out OK; send warning to client
+		//Geolocation and time limits checked out OK; send warning to client
 			$returnData['weatherWarnings'][] = "<b>Alert type: </b>$alertType<br />" .
 				"<b>Issued By: </b>$issuingOffice<br />" .
 				"<b>Issue Time: </b>$issueTime<br />" .
@@ -1275,9 +1151,9 @@ elseif($_GET['type'] == "alertJSON")
 		}
 
 		//Save HWO alert number for overwriting if needed
-		if($isHWO && !isset($HWOAlertNum)) $HWOAlertNum = count($returnData['weatherWarnings'])-1;
+		if($alertCode == "HWO" && !isset($HWOAlertNum)) $HWOAlertNum = count($returnData['weatherWarnings'])-1;
 	}
-		
+	
 	//Space Weather Alerts, if enabled
 	//Modified to only show newest of Alerts and Watches, to prevent too many messages appearing
 	if($config['general']['spaceWeatherAlerts'])
